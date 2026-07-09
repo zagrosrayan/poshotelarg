@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        @font-face {
+            font-family: 'Vazir';
+            src: url('{{ public_path('font/Vazir.ttf') }}') format('truetype');
+        }
+        @page {
+            size: A5 portrait;
+            margin: 0;
+        }
+        body {
+            width: 148mm; /* عرض A5 */
+            height: 210mm; /* ارتفاع A5 */
+            margin: 0;
+            padding: 0;
+            background-color: #fff;
+            font-family: 'Vazir', Tahoma, Arial;
+            direction: rtl;
+            text-align: right;
+            font-size: 12px;
+        }
+        .invoice-container {
+            width: 148mm; /* عرض A5 */
+            height: 210mm; /* ارتفاع A5 */
+            margin: 0 auto;
+            padding: 10mm;
+            box-sizing: border-box;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+        .hotel-info {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .info-item {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+        }
+        .info-item h3 {
+            margin: 0 0 5px 0;
+            font-size: 12px;
+            color: #555;
+        }
+        .info-item p {
+            margin: 0;
+            font-size: 12px;
+            color: #333;
+            font-weight: bold;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        .items-table th,
+        .items-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .items-table th {
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        .total-section {
+            text-align: right;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .total-section table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .total-section td {
+            padding: 8px;
+            border: none;
+            font-size: 12px;
+        }
+        .total-section td:first-child {
+            font-weight: bold;
+            color: #333;
+        }
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .invoice-container {
+                box-shadow: none;
+                margin: 0;
+                padding: 10mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="hotel-info">
+            <h1>هتل ارگ</h1>
+        </div>
+
+        <!-- اطلاعات فاکتور به صورت گرید -->
+        <div class="info-grid">
+            <div class="info-item">
+                <h3>نام مشتری</h3>
+                <p>{{ $order->customer->name ?? $order->reserve->GuestName }}</p>
+            </div>
+            <div class="info-item">
+                <h3>مجموع قیمت</h3>
+                <p>{{ number_format($order->total_price) }} تومان</p>
+            </div>
+            <div class="info-item">
+                <h3>تخفیف</h3>
+                <p>{{ number_format($order->discounted_price) }} تومان</p>
+            </div>
+            <div class="info-item">
+                <h3>تعداد</h3>
+                <p>{{ $order->quantity }}</p>
+            </div>
+            <div class="info-item">
+                <h3>روش پرداخت</h3>
+                <p>{{ optional($order->paymentMethod)->name }}</p>
+            </div>
+            <div class="info-item">
+                <h3>شماره اتاق</h3>
+                <p>{{ $order->reserve->Room ?? 'بدون اتاق' }}</p>
+            </div>
+            <div class="info-item">
+                <h3>تاریخ</h3>
+                <p>{{ \Morilog\Jalali\Jalalian::fromDateTime($order->order_date)->format('Y/m/d') }}</p>
+            </div>
+            <div class="info-item">
+                <h3>شماره میز</h3>
+                <p>{{ $order->desc_number ?? 'بدون شماره میز' }}</p>
+            </div>
+        </div>
+
+        <!-- جدول اقلام -->
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th>ردیف</th>
+                    <th>شرح کالا</th>
+                    <th>تعداد</th>
+                    <th>فی (تومان)</th>
+                    <th>جمع (تومان)</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($order->children as $index => $item)
+                <tr>
+                    <td>{{ $index + 1 }}</td>
+                    <td>{{ optional($item->food)->name }}</td>
+                    <td>{{ $item->quantity }}</td>
+                    <td>{{ number_format($item->price) }}</td>
+                    <td>{{ number_format($item->quantity * $item->price) }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+
+        <!-- بخش جمع‌کل -->
+        <div class="total-section">
+            <table>
+                <tr>
+                    <td>جمع کل:</td>
+                    <td>{{ number_format($order->price) }} تومان</td>
+                </tr>
+                @if(!empty($order->rate_service))
+                <tr>
+                    <td>حق سرویس ({{ $order->rate_service }}%):</td>
+                    <td>{{ number_format(($order->price * $order->rate_service) / 100) }} تومان</td>
+                </tr>
+                @endif
+                <tr>
+                    <td>مالیات ({{ $order->tax }}%):</td>
+                    <td>{{ number_format(($order->price * $order->tax) / 100) }} تومان</td>
+                </tr>
+                <tr>
+                    <td><strong>مبلغ قابل پرداخت:</strong></td>
+                    <td><strong>{{ number_format($order->total_price) }} تومان</strong></td>
+                </tr>
+            </table>
+        </div>
+        <div class="footer">
+            <p>با تشکر از خرید شما</p>
+        </div>
+    </div>
+</body>
+</html>
