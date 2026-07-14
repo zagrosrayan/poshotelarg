@@ -1056,31 +1056,31 @@ class OrderController extends Controller
             'name' => 'nullable|string',
             'phone' => 'nullable|string',
             'reserve_number' => 'nullable|string|exists:inhouseList,Reserve',
-            // 'discount_normal_code' => ['nullable','string', new CheckDiscountValid('normal')],
-            // 'discount_global_code' => ['nullable','string', new CheckDiscountValid('global')],
-            // 'use_next_purchase_discount' => ['nullable','boolean'],
-            // 'discount_type' => 'nullable|in:percentage,fixed',
-            // 'discount_value' => [
-            //     'nullable','numeric','min:0',
-            //     function ($attribute, $value, $fail) use ($total_price, $request) {
-            //         if (!$request->discount_type) {
-            //             return;
-            //         }
-            //         if ($request->discount_type === 'percentage') {
-            //             if ($value > 100) {
-            //                 $fail('درصد تخفیف نمی‌تواند بیشتر از 100 باشد');
-            //                 return;
-            //             }
-            //             $discountAmount = ($value / 100) * $total_price;
-            //             if ($discountAmount > $total_price) {
-            //                 $fail('مقدار تخفیف محاسبه‌شده نمی‌تواند بیشتر از جمع کل سفارش باشد');
-            //             }
-            //         }
-            //         if ($request->discount_type === 'fixed' && $value > $total_price) {
-            //             $fail('مقدار تخفیف نمی‌تواند بیشتر از جمع کل سفارش باشد');
-            //         }
-            //     },
-            // ],
+            'discount_normal_code' => ['nullable', 'string', new CheckDiscountValid('normal')],
+            'discount_global_code' => ['nullable', 'string', new CheckDiscountValid('global')],
+            'use_next_purchase_discount' => ['nullable', 'boolean'],
+            'discount_type' => 'nullable|in:percentage,fixed',
+            'discount_value' => [
+                'nullable', 'numeric', 'min:0',
+                function ($attribute, $value, $fail) use ($total_price, $request) {
+                    if (!$request->discount_type) {
+                        return;
+                    }
+                    if ($request->discount_type === 'percentage') {
+                        if ($value > 100) {
+                            $fail('درصد تخفیف نمی‌تواند بیشتر از 100 باشد');
+                            return;
+                        }
+                        $discountAmount = ($value / 100) * $total_price;
+                        if ($discountAmount > $total_price) {
+                            $fail('مقدار تخفیف محاسبه‌شده نمی‌تواند بیشتر از جمع کل سفارش باشد');
+                        }
+                    }
+                    if ($request->discount_type === 'fixed' && $value > $total_price) {
+                        $fail('مقدار تخفیف نمی‌تواند بیشتر از جمع کل سفارش باشد');
+                    }
+                },
+            ],
             'use_club_points' => [
                 'nullable','boolean',
                 function ($attribute, $value, $fail) use ($request, $order) {
@@ -1126,55 +1126,55 @@ class OrderController extends Controller
                 'status' => Type::query()->where('slug', TypeSlug::LOG_STATUS_SUCCESS)->first()->id
             ]);
 
-            // $discountFields = [
-            //     'discount_normal_code' => $request->discount_normal_code,
-            //     'discount_global_code' => $request->discount_global_code,
-            //     'use_next_purchase_discount' => $request->use_next_purchase_discount,
-            //     'discount_value' => $request->discount_value,
-            //     'use_club_points' => $request->use_club_points
-            // ];
-            // $activeDiscounts = collect($discountFields)->filter(fn($value) => !empty($value))->count();
-            // if ($activeDiscounts > 1) {
-            //     return (new Response())->ApiResponse([
-            //         'status' => 422,
-            //         'message' => 'فقط یک نوع تخفیف قابل استفاده است',
-            //     ]);
-            // }
+            $discountFields = [
+                'discount_normal_code' => $request->discount_normal_code,
+                'discount_global_code' => $request->discount_global_code,
+                'use_next_purchase_discount' => $request->use_next_purchase_discount,
+                'discount_value' => $request->discount_value,
+                'use_club_points' => $request->use_club_points
+            ];
+            $activeDiscounts = collect($discountFields)->filter(fn($value) => !empty($value))->count();
+            if ($activeDiscounts > 1) {
+                return (new Response())->ApiResponse([
+                    'status' => 422,
+                    'message' => 'فقط یک نوع تخفیف قابل استفاده است',
+                ]);
+            }
 
-            // $discount_code = collect([
-            //     $request->discount_global_code,
-            //     $request->discount_normal_code,
-            // ])->filter()->first();
+            $discount_code = collect([
+                $request->discount_global_code,
+                $request->discount_normal_code,
+            ])->filter()->first();
 
-            // if ($request->boolean('use_next_purchase_discount')) {
-            //     $customerId = $request->customer_id ?? $order->customer_id;
-            //     $reserveNumber = $request->reserve_number ?? $order->reserve_number;
-            //     $nextPurchaseDiscount = Discount::where('scope', 'next_purchase')
-            //         ->where('is_active', true)
-            //         ->where(function ($q) use ($customerId, $reserveNumber) {
-            //             if ($customerId) {
-            //                 $q->where('customer_id', $customerId);
-            //             }
-            //             if ($reserveNumber) {
-            //                 $q->orWhere('reserve_number', $reserveNumber);
-            //             }
-            //         })
-            //         ->where('expires_at', '>', now())
-            //         ->whereColumn('usage_count', '<', 'usage_limit')
-            //         ->first();
-            //     if ($nextPurchaseDiscount) {
-            //         $discount_code = $nextPurchaseDiscount->code;
-            //     }
-            // }
+            if ($request->boolean('use_next_purchase_discount')) {
+                $customerId = $request->customer_id ?? $order->customer_id;
+                $reserveNumber = $request->reserve_number ?? $order->reserve_number;
+                $nextPurchaseDiscount = Discount::where('scope', 'next_purchase')
+                    ->where('is_active', true)
+                    ->where(function ($q) use ($customerId, $reserveNumber) {
+                        if ($customerId) {
+                            $q->where('customer_id', $customerId);
+                        }
+                        if ($reserveNumber) {
+                            $q->orWhere('reserve_number', $reserveNumber);
+                        }
+                    })
+                    ->where('expires_at', '>', now())
+                    ->whereColumn('usage_count', '<', 'usage_limit')
+                    ->first();
+                if ($nextPurchaseDiscount) {
+                    $discount_code = $nextPurchaseDiscount->code;
+                }
+            }
 
             $applyRateService = $order->rate_service > 0;
             $orderRepo = app(OrderRepository::class);
             $calculate = $orderRepo->calculatePrice(
                 $orderDetails,
                 $total_price,
-                null,
-                null,
-                null,
+                $discount_code,
+                $request->discount_value ?? null,
+                $request->discount_type ?? null,
                 $applyRateService,
                 $request->reserve_number ?? $order->reserve_number,
                 $request->customer_id ?? $order->customer_id,
@@ -1182,20 +1182,20 @@ class OrderController extends Controller
                 $request->boolean('use_club_points')
             );
 
-            // $oldDiscountId = $order->discount_id;
-            // $newDiscountId = null;
-            // if (!empty($calculate['discount'])) {
-            //     $newDiscountId = $calculate['discount'];
-            // } elseif (empty($calculate['discount']) && !empty($request->discount_value) && !empty($request->discount_type)) {
-            //     $newDiscountId = Discount::query()->create([
-            //         'code' => null,
-            //         'name' => 'تخفیف دستی',
-            //         'discount_value' => $request->discount_value,
-            //         'discount_type' => $request->discount_type,
-            //         'is_active' => true,
-            //         'scope' => 'in_order'
-            //     ])->id;
-            // }
+            $oldDiscountId = $order->discount_id;
+            $newDiscountId = null;
+            if (!empty($calculate['discount'])) {
+                $newDiscountId = $calculate['discount'];
+            } elseif (empty($calculate['discount']) && !empty($request->discount_value) && !empty($request->discount_type)) {
+                $newDiscountId = Discount::query()->create([
+                    'code' => null,
+                    'name' => 'تخفیف دستی',
+                    'discount_value' => $request->discount_value,
+                    'discount_type' => $request->discount_type,
+                    'is_active' => true,
+                    'scope' => 'in_order'
+                ])->id;
+            }
 
             $setting = Setting::first();
             $total_service_fee = 0;
@@ -1226,10 +1226,10 @@ class OrderController extends Controller
                 'rate_service' => $total_service_fee,
                 'tax' => $total_tax,
                 'discounted_price' => (int) round($calculate['discounted_price']),
-                // 'discount_id' => $newDiscountId,
-                // 'discount_code' => $discount_code,
-                // 'discount_value' => $request->discount_value,
-                // 'discount_type' => $request->discount_type,
+                'discount_id' => $newDiscountId,
+                'discount_code' => $discount_code,
+                'discount_value' => $request->discount_value,
+                'discount_type' => $request->discount_type,
                 'club_points_used' => $calculate['club_points_used'] ?? 0,
                 'expired_discount_info' => $calculate['expired_discount_info'] ?? null,
             ]);
@@ -1241,24 +1241,24 @@ class OrderController extends Controller
                     ? intval(round(($item_price / $total_price) * $calculate['discounted_price']))
                     : 0;
                 $item->update([
-                    // 'discount_id' => $newDiscountId,
+                    'discount_id' => $newDiscountId,
                     'discounted_price' => $item_discount,
                     'rate_service' => $child_service_fees[$index] ?? 0,
                     'tax' => $child_taxes[$index] ?? 0,
                 ]);
             }
 
-            // if ($oldDiscountId != $newDiscountId) {
-            //     if (!empty($oldDiscountId)) {
-            //         $oldModel = Discount::find($oldDiscountId);
-            //         if ($oldModel && $oldModel->usage_count > 0) {
-            //             $oldModel->decrement('usage_count');
-            //         }
-            //     }
-            //     if (!empty($newDiscountId)) {
-            //         Discount::find($newDiscountId)?->increment('usage_count');
-            //     }
-            // }
+            if ($oldDiscountId != $newDiscountId) {
+                if (!empty($oldDiscountId)) {
+                    $oldModel = Discount::find($oldDiscountId);
+                    if ($oldModel && $oldModel->usage_count > 0) {
+                        $oldModel->decrement('usage_count');
+                    }
+                }
+                if (!empty($newDiscountId)) {
+                    Discount::find($newDiscountId)?->increment('usage_count');
+                }
+            }
 
             return (new Response())->ApiResponse([
                 'message' => 'عملیات موفقیت آمیز بود',
