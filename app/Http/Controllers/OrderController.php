@@ -1262,6 +1262,14 @@ class OrderController extends Controller
 
             return (new Response())->ApiResponse([
                 'message' => 'عملیات موفقیت آمیز بود',
+                // TODO: remove debug block after verifying discount fix on production
+                'debug_discount_fix' => [
+                    'code_version' => 'discount-fix-v3',
+                    'received_discount_code' => $discount_code,
+                    'received_discount_value' => $request->discount_value,
+                    'received_discount_type' => $request->discount_type,
+                    'calculated_discounted_price' => $calculate['discounted_price'],
+                ],
                 'items' => Order::with([
                     'customer',
                     'user',
