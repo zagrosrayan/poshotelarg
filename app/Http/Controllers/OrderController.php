@@ -1056,6 +1056,7 @@ class OrderController extends Controller
             'name' => 'nullable|string',
             'phone' => 'nullable|string',
             'reserve_number' => 'nullable|string|exists:inhouseList,Reserve',
+            'discount_code' => ['nullable', 'string'],
             'discount_normal_code' => ['nullable', 'string', new CheckDiscountValid('normal')],
             'discount_global_code' => ['nullable', 'string', new CheckDiscountValid('global')],
             'use_next_purchase_discount' => ['nullable', 'boolean'],
@@ -1127,6 +1128,7 @@ class OrderController extends Controller
             ]);
 
             $discountFields = [
+                'discount_code' => $request->discount_code,
                 'discount_normal_code' => $request->discount_normal_code,
                 'discount_global_code' => $request->discount_global_code,
                 'use_next_purchase_discount' => $request->use_next_purchase_discount,
@@ -1142,6 +1144,7 @@ class OrderController extends Controller
             }
 
             $discount_code = collect([
+                $request->discount_code,
                 $request->discount_global_code,
                 $request->discount_normal_code,
             ])->filter()->first();
