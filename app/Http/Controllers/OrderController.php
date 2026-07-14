@@ -1227,9 +1227,6 @@ class OrderController extends Controller
                 'tax' => $total_tax,
                 'discounted_price' => (int) round($calculate['discounted_price']),
                 'discount_id' => $newDiscountId,
-                'discount_code' => $discount_code,
-                'discount_value' => $request->discount_value,
-                'discount_type' => $request->discount_type,
                 'club_points_used' => $calculate['club_points_used'] ?? 0,
                 'expired_discount_info' => $calculate['expired_discount_info'] ?? null,
             ]);
