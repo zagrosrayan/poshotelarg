@@ -67,7 +67,7 @@ class NextPurchaseDiscount extends Model
             'name' => $this->name,
             'code' => $code,
             'discount_value' => $discountValue,
-            'minimum_price' => $this->minimum_purchase_amount,
+            'minimum_price' => (int) round((float) $this->minimum_purchase_amount),
             'customer_id' => $customerId ?? null,
             'reserve_number' => $reserve_number ?? null,
             'is_special' => $reserve_number ? true : false,
