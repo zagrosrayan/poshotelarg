@@ -1170,34 +1170,66 @@ class OrderController extends Controller
                 }
             }
 
+            $manual_discount_value = $request->discount_value;
+            $manual_discount_type = $request->discount_type;
+            $use_club_points = $request->boolean('use_club_points');
+
+            // اگر درخواست هیچ فیلد تخفیفی نداشت، تخفیف فعلی سفارش حفظ شود (سازگاری با نسخه‌های قدیمی فرانت)
+            $hasDiscountInput = $request->has('selected_discount_type')
+                || $request->filled('discount_code')
+                || $request->filled('discount_normal_code')
+                || $request->filled('discount_global_code')
+                || $request->filled('discount_value')
+                || $request->has('use_next_purchase_discount')
+                || $request->has('use_club_points');
+
+            if (!$hasDiscountInput && empty($discount_code)) {
+                if (($order->club_points_used ?? 0) > 0) {
+                    $use_club_points = true;
+                } elseif ($order->discount) {
+                    if (!empty($order->discount->code)) {
+                        $discount_code = $order->discount->code;
+                    } elseif ($order->discount->scope === 'in_order') {
+                        $manual_discount_value = $order->discount->discount_value;
+                        $manual_discount_type = $order->discount->discount_type;
+                    }
+                }
+            }
+
             $applyRateService = $order->rate_service > 0;
             $orderRepo = app(OrderRepository::class);
             $calculate = $orderRepo->calculatePrice(
                 $orderDetails,
                 $total_price,
                 $discount_code,
-                $request->discount_value ?? null,
-                $request->discount_type ?? null,
+                $manual_discount_value ?? null,
+                $manual_discount_type ?? null,
                 $applyRateService,
                 $request->reserve_number ?? $order->reserve_number,
                 $request->customer_id ?? $order->customer_id,
                 false,
-                $request->boolean('use_club_points')
+                $use_club_points
             );
 
             $oldDiscountId = $order->discount_id;
             $newDiscountId = null;
             if (!empty($calculate['discount'])) {
                 $newDiscountId = $calculate['discount'];
-            } elseif (empty($calculate['discount']) && !empty($request->discount_value) && !empty($request->discount_type)) {
-                $newDiscountId = Discount::query()->create([
-                    'code' => null,
-                    'name' => 'تخفیف دستی',
-                    'discount_value' => $request->discount_value,
-                    'discount_type' => $request->discount_type,
-                    'is_active' => true,
-                    'scope' => 'in_order'
-                ])->id;
+            } elseif (empty($calculate['discount']) && !empty($manual_discount_value) && !empty($manual_discount_type)) {
+                if ($order->discount && $order->discount->scope === 'in_order'
+                    && $order->discount->discount_value == $manual_discount_value
+                    && $order->discount->discount_type == $manual_discount_type) {
+                    $newDiscountId = $order->discount_id;
+                } else {
+                    $newDiscountId = Discount::query()->create([
+                        'code' => null,
+                        'name' => 'تخفیف دستی',
+                        'discount_value' => $manual_discount_value,
+                        'discount_type' => $manual_discount_type,
+                        'is_active' => true,
+                        'scope' => 'in_order'
+                    ])->id;
+                }
             }
 
             $setting = Setting::first();
@@ -1264,10 +1296,11 @@ class OrderController extends Controller
                 'message' => 'عملیات موفقیت آمیز بود',
                 // TODO: remove debug block after verifying discount fix on production
                 'debug_discount_fix' => [
-                    'code_version' => 'discount-fix-v3',
-                    'received_discount_code' => $discount_code,
-                    'received_discount_value' => $request->discount_value,
-                    'received_discount_type' => $request->discount_type,
+                    'code_version' => 'discount-fix-v4',
+                    'request_had_discount_fields' => $hasDiscountInput,
+                    'effective_discount_code' => $discount_code,
+                    'effective_discount_value' => $manual_discount_value,
+                    'effective_discount_type' => $manual_discount_type,
                     'calculated_discounted_price' => $calculate['discounted_price'],
                 ],
                 'items' => Order::with([
