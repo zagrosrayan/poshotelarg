@@ -17,6 +17,7 @@ class Kernel extends ConsoleKernel
         // $schedule->command('inspire')->hourly();
         $schedule->job(DeactiveDiscountsJob::class)->everyTenMinutes();
         $schedule->job(UpgradeCustomersPoints::class)->everyThirtyMinutes();
+        $schedule->command('sms:dispatch-discount-patterns')->everyFifteenMinutes();
     }
 
     /**

@@ -2,20 +2,16 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\SendNextPurchaseDiscountToCustomers;
-use App\Jobs\SendOrderCompleteSms;
-use App\Jobs\SendOrderWelcomeSms;
 use App\Models\Customer;
 use App\Models\Discount;
+use App\Models\DiscountSmsDelivery;
 use App\Models\Food;
-use App\Models\GuestUser;
 use App\Models\NextPurchaseDiscount;
 use App\Models\Order;
 use App\Models\Setting;
 use App\Models\Type;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class HotelArgFeaturesTest extends TestCase
@@ -45,13 +41,10 @@ class HotelArgFeaturesTest extends TestCase
     }
 
     /**
-     * Test 1: SMS jobs are not dispatched during order creation or finalization.
+     * Test 1: Finalizing an order does not require order-complete SMS settings.
      */
     public function test_sms_sending_logic_on_create_and_finalize()
     {
-        Queue::fake();
-
-        // 1. Create Order
         $response = $this->actingAs($this->user)->postJson('/api/orders', [
             'service_type' => 'takeaway',
             'rate_service' => 0,
@@ -64,14 +57,7 @@ class HotelArgFeaturesTest extends TestCase
         $response->assertStatus(200);
         $orderId = $response->json('items.id');
 
-        // Verify NO SMS job dispatched on creation
-        Queue::assertNotPushed(SendOrderWelcomeSms::class);
-        Queue::assertNotPushed(SendOrderCompleteSms::class);
-
-        // 2. Finalize Order with SMS settings enabled to verify they are ignored.
         Setting::updateOrCreate(['id' => 1], [
-            'send_order_complete_sms' => true,
-            'order_complete_sms_template' => 'Order {order_number} completed.',
             'tax' => 0,
             'rate_service' => 0
         ]);
@@ -84,47 +70,34 @@ class HotelArgFeaturesTest extends TestCase
         ]);
 
         $finalizeResponse->assertStatus(200);
-
-        Queue::assertNotPushed(SendOrderCompleteSms::class);
-        Queue::assertNotPushed(SendOrderWelcomeSms::class);
     }
 
     /**
-     * Test 2 & 11 & 14: Next Purchase Discount Duration, Reminder, and SMS Templates.
+     * Test 2: Next purchase discount is created and pattern SMS deliveries are scheduled.
      */
     public function test_next_purchase_discount_configuration_and_jobs()
     {
-        Queue::fake();
-
-        // Setup Next Purchase Discount Settings
         $validityDays = 15;
-        $reminderDays = 2;
-        $smsTemplate = 'Discount Code: {code}';
-        $reminderTemplate = 'Reminder: {code} expires soon!';
-        
+
         NextPurchaseDiscount::create([
             'name' => 'Test Next Purchase',
             'minimum_purchase_amount' => 50000,
             'discount_percentage' => 10,
             'is_active' => true,
             'discount_validity_days' => $validityDays,
-            'reminder_days_before_expiration' => $reminderDays,
-            'discount_sms_template' => $smsTemplate,
-            'reminder_sms_template' => $reminderTemplate,
-            'target_customer_types' => ['guest', 'resident'], // Allow both
+            'target_customer_types' => ['Non_resident', 'resident'],
             'profit_manager_ids' => []
         ]);
 
-        // Create and Finalize Order to trigger discount creation
         $order = Order::create([
             'user_id' => $this->user->id,
             'customer_id' => $this->customer->id,
             'status' => $this->orderStatusPending->id,
             'invoice_number' => rand(100000, 999999),
-            'total_price' => 100000, // Eligible
+            'total_price' => 100000,
             'service_type' => 'takeaway',
         ]);
-        
+
         Order::create([
             'parent_id' => $order->id,
             'food_id' => $this->food->id,
@@ -143,20 +116,32 @@ class HotelArgFeaturesTest extends TestCase
 
         $finalizeResponse->assertStatus(200);
 
-        // Check if discount was created with correct duration
         $discount = Discount::where('scope', 'next_purchase')
             ->where('customer_id', $this->customer->id)
             ->latest()
             ->first();
 
         $this->assertNotNull($discount);
-        // Allow 1 second tolerance or just check dates
         $this->assertEquals(
-            now()->addDays($validityDays)->format('Y-m-d'), 
+            now()->addDays($validityDays)->format('Y-m-d'),
             $discount->expires_at->format('Y-m-d')
         );
 
-        Queue::assertNotPushed(SendNextPurchaseDiscountToCustomers::class);
+        $issued = DiscountSmsDelivery::where('discount_id', $discount->id)
+            ->where('type', DiscountSmsDelivery::TYPE_ISSUED)
+            ->first();
+        $reminder = DiscountSmsDelivery::where('discount_id', $discount->id)
+            ->where('type', DiscountSmsDelivery::TYPE_REMINDER)
+            ->first();
+
+        $this->assertNotNull($issued);
+        $this->assertSame(DiscountSmsDelivery::STATUS_PENDING, $issued->status);
+        $this->assertSame(now()->toDateString(), $issued->scheduled_for->toDateString());
+        $this->assertNotNull($reminder);
+        $this->assertSame(
+            $discount->expires_at->copy()->subDays(4)->toDateString(),
+            $reminder->scheduled_for->toDateString()
+        );
     }
 
     /**
@@ -259,8 +244,6 @@ class HotelArgFeaturesTest extends TestCase
      */
     public function test_next_purchase_discount_target_types()
     {
-        Queue::fake();
-
         // 1. Discount for Residents Only
         NextPurchaseDiscount::create([
             'name' => 'Resident Only',

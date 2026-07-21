@@ -23,6 +23,7 @@ use App\Models\User;
 use App\Repository\OrderRepository;
 use App\Rules\CheckDiscountValid;
 use App\Service\DiscountService;
+use App\Service\NextPurchaseDiscountSmsScheduler;
 use App\Service\PrintService;
 use App\Service\Response;
 use App\Service\validateRequest;
@@ -880,6 +881,25 @@ class OrderController extends Controller
                     $order->customer_id,
                     $order->reserve_number
                 );
+
+                if ($discount) {
+                    $mobile = collect([
+                        $order->customer?->phone,
+                        $order->reserve?->Mobile,
+                    ])->filter()->first();
+
+                    $name = collect([
+                        $order->customer?->name,
+                        $order->reserve?->GuestName,
+                        $order->reserve?->Name,
+                    ])->filter()->first() ?? 'مشتری گرامی';
+
+                    app(NextPurchaseDiscountSmsScheduler::class)->scheduleForDiscount(
+                        $discount,
+                        $mobile,
+                        $name
+                    );
+                }
             }
         }
 

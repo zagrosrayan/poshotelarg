@@ -27,8 +27,6 @@ class SettingController extends Controller
         $validationResult = (new validateRequest())->validate($request->all(), [
             'tax' => 'required|numeric|max:255',
             'rate_service' => 'required|numeric|min:0|max:100', // درصد تخفیف
-            'order_complete_sms_template' => 'nullable|string',
-            'send_order_complete_sms' => 'nullable|boolean',
         ]);
         if ($validationResult !== true) {
             return $validationResult;
@@ -37,8 +35,6 @@ class SettingController extends Controller
             $data = $request->only([
                 'tax',
                 'rate_service',
-                'order_complete_sms_template',
-                'send_order_complete_sms'
             ]);
 
             $setting->update($data);

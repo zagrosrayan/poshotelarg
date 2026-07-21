@@ -31,4 +31,18 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'payamak' => [
+        'username' => env('API_USERNAME_MELI_PAYAMAK'),
+        'password' => env('API_KEY_MELI_PAYAMAK'),
+        'from' => env('API_FROM_MELI_PAYAMAK'),
+        'body_ids' => [
+            'next_purchase_issued' => (int) env('PAYAMAK_BODY_ID_NEXT_PURCHASE', 499216),
+            'next_purchase_reminder' => (int) env('PAYAMAK_BODY_ID_NEXT_PURCHASE_REMINDER', 499219),
+        ],
+        'reminder_days_before_expiration' => 4,
+        'send_window_start_hour' => 10,
+        'send_window_end_hour' => 21,
+        'max_attempts' => 3,
+    ],
+
 ];

@@ -1,6 +1,22 @@
 # Queue and SMS production runbook
 
-This document covers production checks that cannot be performed from the
+Next-purchase discount SMS now uses Melipayamak `SendByBaseNumber2` patterns
+and a local scheduler (`sms:dispatch-discount-patterns` every 15 minutes).
+No Laravel queue worker is required for automatic discount SMS.
+
+Required cron:
+
+```bash
+* * * * * cd /path/to/hotel-pos-backend && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Manual dry check:
+
+```bash
+php artisan sms:dispatch-discount-patterns
+```
+
+This document also covers legacy queue checks that cannot be performed from the
 local source copy. Do not start the worker until pending SMS jobs have been
 reviewed and removed.
 

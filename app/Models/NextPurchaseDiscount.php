@@ -18,10 +18,7 @@ class NextPurchaseDiscount extends Model
         'minimum_purchase_amount',
         'discount_percentage',
         'is_active',
-        'reminder_days_before_expiration',
         'discount_validity_days',
-        'discount_sms_template',
-        'reminder_sms_template',
         'profit_manager_ids',
         'target_customer_types',
     ];
@@ -31,7 +28,6 @@ class NextPurchaseDiscount extends Model
         'discount_percentage' => 'decimal:2',
         'is_active' => 'boolean',
         'days' => 'integer',
-        'reminder_days_before_expiration' => 'integer',
         'discount_validity_days' => 'integer',
         'profit_manager_ids' => 'array',
         'target_customer_types' => 'array',
