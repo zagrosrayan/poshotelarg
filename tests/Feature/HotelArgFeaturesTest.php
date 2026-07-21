@@ -45,17 +45,13 @@ class HotelArgFeaturesTest extends TestCase
     }
 
     /**
-     * Test 1: SMS is NOT sent on order creation, but IS sent on order finalization.
+     * Test 1: SMS jobs are not dispatched during order creation or finalization.
      */
     public function test_sms_sending_logic_on_create_and_finalize()
     {
         Queue::fake();
 
-        // 1. Create Order (Should NOT dispatch SendOrderCompleteSms, but MIGHT dispatch SendOrderWelcomeSms if configured, 
-        // but user requested to remove Welcome SMS from createOrder or change logic. 
-        // Based on my changes, I removed SendOrderWelcomeSms from createOrder per request.
-        // Wait, I removed it in the previous step? Yes, todo said "Remove SendOrderWelcomeSms from OrderController::createOrder".
-        
+        // 1. Create Order
         $response = $this->actingAs($this->user)->postJson('/api/orders', [
             'service_type' => 'takeaway',
             'rate_service' => 0,
@@ -72,8 +68,7 @@ class HotelArgFeaturesTest extends TestCase
         Queue::assertNotPushed(SendOrderWelcomeSms::class);
         Queue::assertNotPushed(SendOrderCompleteSms::class);
 
-        // 2. Finalize Order (Should dispatch SendOrderCompleteSms)
-        // Ensure Settings allow SMS
+        // 2. Finalize Order with SMS settings enabled to verify they are ignored.
         Setting::updateOrCreate(['id' => 1], [
             'send_order_complete_sms' => true,
             'order_complete_sms_template' => 'Order {order_number} completed.',
@@ -90,8 +85,8 @@ class HotelArgFeaturesTest extends TestCase
 
         $finalizeResponse->assertStatus(200);
 
-        // Verify SendOrderCompleteSms IS dispatched
-        Queue::assertPushed(SendOrderCompleteSms::class);
+        Queue::assertNotPushed(SendOrderCompleteSms::class);
+        Queue::assertNotPushed(SendOrderWelcomeSms::class);
     }
 
     /**
@@ -161,19 +156,7 @@ class HotelArgFeaturesTest extends TestCase
             $discount->expires_at->format('Y-m-d')
         );
 
-        // Check SMS Jobs
-        Queue::assertPushed(SendNextPurchaseDiscountToCustomers::class, function ($job) use ($smsTemplate, $reminderTemplate) {
-            // We can't easily check properties if they are protected, but we can check if it was pushed twice 
-            // (once for initial, once for reminder) or check the job constructor arguments via reflection if needed.
-            // Or simpler: check if pushed.
-            return true;
-        });
-
-        // Verify 2 jobs pushed (Initial + Reminder)
-        // Note: The logic in OrderController dispatches twice: once immediate/delayed(0), once delayed for reminder.
-        // Queue::assertPushed(SendNextPurchaseDiscountToCustomers::class, 2); 
-        // Actually, let's just ensure it was pushed.
-        Queue::assertPushed(SendNextPurchaseDiscountToCustomers::class);
+        Queue::assertNotPushed(SendNextPurchaseDiscountToCustomers::class);
     }
 
     /**

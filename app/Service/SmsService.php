@@ -12,7 +12,7 @@ class SmsService
         $password = env('API_KEY_MELI_PAYAMAK');
         $from     = env('API_FROM_MELI_PAYAMAK');
 
-        $url = 'https://api.payamak-panel.com/post/Send.asmx/SendSimpleSMS2';
+        $url = 'http://api.payamak-panel.com/post/Send.asmx/SendSimpleSMS2';
 
         $results = [];
 
@@ -76,6 +76,7 @@ class SmsService
 
             $response = trim($response);
 
+            // موفقیت = فقط عدد مثبت (RecId)
             $success = ctype_digit($response) && (int)$response > 100;
 
             Sms::create([

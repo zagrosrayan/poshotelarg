@@ -5,8 +5,6 @@ use Illuminate\Support\Facades\Log as Logger;
 use App\Http\Requests\CompleteOrderRequest;
 use App\Http\Requests\CreateOrderRequest;
 use App\Http\Service\TypeSlug;
-use App\Jobs\SendNextPurchaseDiscountToCustomers;
-use App\Jobs\SendOrderCompleteSms;
 use App\Models\Article;
 use App\Models\ClubSetting;
 use App\Models\Customer;
@@ -835,24 +833,6 @@ class OrderController extends Controller
             'status' => Type::query()->where('slug', TypeSlug::LOG_STATUS_SUCCESS)->first()->id,
         ]);
 
-        $setting = Setting::first();
-        if ($setting && $setting->send_order_complete_sms && $setting->order_complete_sms_template) {
-            $mobile = collect([
-                $order->customer?->phone,
-                $order->reserve?->Mobile,
-            ])->filter()->first();
-
-            if ($mobile) {
-                $smsData = [
-                    'name' => $order->customer?->name ?? $order->reserve?->GuestName ?? 'مشتری گرامی',
-                    'order_number' => $order->invoice_number,
-                    'price' => $order->total_price,
-                    'date' => Jalalian::now()->format('Y/m/d H:i'),
-                ];
-                SendOrderCompleteSms::dispatch($mobile, $setting->order_complete_sms_template, $smsData);
-            }
-        }
-        
         // ایجاد تخفیف خرید بعدی بر اساس تنظیمات فعال
         $nextDiscountSettings = NextPurchaseDiscount::getLatestActive();
 
@@ -900,47 +880,6 @@ class OrderController extends Controller
                     $order->customer_id,
                     $order->reserve_number
                 );
-
-                if ($discount) {
-                    $mobile = collect([
-                        $order->customer?->phone,
-                        $order->reserve?->Mobile,
-                    ])->filter()->first();
-
-                    if ($mobile) {
-                        $smsData = [
-                            'name' => $order->customer?->name ?? $order->reserve?->Name ?? 'مشتری گرامی',
-                            'order_number' => $order->invoice_number,
-                        ];
- 
-                    Logger::error('send to job with delay ' . now()->addDays($nextDiscountSettings->days ?? 0));
-                        // Send Discount SMS
-                        $job = SendNextPurchaseDiscountToCustomers::dispatch(
-                            $mobile,
-                            $discount,
-                            $nextDiscountSettings->discount_sms_template,
-                            $smsData
-                        );
-
-                        if (!is_null($nextDiscountSettings->days)) {
-                            $job->delay(now()->addDays((int) $nextDiscountSettings->days));
-                        }
-
-
-                        // Send Reminder SMS
-                        if ($nextDiscountSettings->reminder_days_before_expiration) {
-                            $reminderDelay = $discount->expires_at->copy()->subDays($nextDiscountSettings->reminder_days_before_expiration);
-                            if ($reminderDelay->isFuture()) {
-                                SendNextPurchaseDiscountToCustomers::dispatch(
-                                    $mobile,
-                                    $discount,
-                                    $nextDiscountSettings->reminder_sms_template,
-                                    $smsData
-                                )->delay($reminderDelay);
-                            }
-                        }
-                    }
-                }
             }
         }
 
