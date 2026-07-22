@@ -97,6 +97,7 @@ class HotelArgFeaturesTest extends TestCase
             'minimum_purchase_amount' => 50000,
             'discount_percentage' => 10,
             'is_active' => true,
+            'sms_enabled' => true,
             'discount_validity_days' => $validityDays,
             'target_customer_types' => ['Non_resident', 'resident'],
             'profit_manager_ids' => []

@@ -883,22 +883,24 @@ class OrderController extends Controller
                 );
 
                 if ($discount) {
-                    $mobile = collect([
-                        $order->customer?->phone,
-                        $order->reserve?->Mobile,
-                    ])->filter()->first();
+                    if ($nextDiscountSettings->sms_enabled) {
+                        $mobile = collect([
+                            $order->customer?->phone,
+                            $order->reserve?->Mobile,
+                        ])->filter()->first();
 
-                    $name = collect([
-                        $order->customer?->name,
-                        $order->reserve?->GuestName,
-                        $order->reserve?->Name,
-                    ])->filter()->first() ?? 'مشتری گرامی';
+                        $name = collect([
+                            $order->customer?->name,
+                            $order->reserve?->GuestName,
+                            $order->reserve?->Name,
+                        ])->filter()->first() ?? 'مشتری گرامی';
 
-                    app(NextPurchaseDiscountSmsScheduler::class)->scheduleForDiscount(
-                        $discount,
-                        $mobile,
-                        $name
-                    );
+                        app(NextPurchaseDiscountSmsScheduler::class)->scheduleForDiscount(
+                            $discount,
+                            $mobile,
+                            $name
+                        );
+                    }
                 }
             }
         }

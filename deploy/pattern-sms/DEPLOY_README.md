@@ -1,29 +1,12 @@
-# Pattern SMS — changed files only
+# SMS on/off for next-purchase discount
 
-Unzip into the Laravel project root (paths are relative to root).
-
-## Files in this zip
-
-- `app/Service/NextPurchaseDiscountSmsScheduler.php` — immediate issued SMS + var order
-- `config/services.php` — default issued bodyId `499852`
-- `.env.example` — `PAYAMAK_BODY_ID_NEXT_PURCHASE=499852`
-- `docs/queue-sms-runbook.md`
-- `tests/Feature/HotelArgFeaturesTest.php`
+Unzip into Laravel root.
 
 ## After unzip
-
-In `.env` set (or update):
-
-```env
-PAYAMAK_BODY_ID_NEXT_PURCHASE=499852
-PAYAMAK_BODY_ID_NEXT_PURCHASE_REMINDER=499219
-```
-
-Then:
-
-```bash
+php artisan migrate --force
 php artisan optimize:clear
-```
 
-Issued SMS uses pattern `499852` and is sent immediately when the discount is created.
-Reminder still uses `499219`.
+## Behavior
+- sms_enabled=true: send issued/reminder pattern SMS
+- sms_enabled=false: discount still created, SMS not sent
+- PUT /v1/next-purchase-discount/{id} with { "sms_enabled": true|false }

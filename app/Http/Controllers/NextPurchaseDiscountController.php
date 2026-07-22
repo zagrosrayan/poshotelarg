@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DiscountSmsDelivery;
 use App\Models\NextPurchaseDiscount;
 use App\Service\Response;
 use App\Service\validateRequest;
@@ -12,8 +13,7 @@ class NextPurchaseDiscountController extends Controller
     public function index(Request $request)
     {
         try {
-            $settings = NextPurchaseDiscount::query()->where('is_active',true);
-
+            $settings = NextPurchaseDiscount::query()->where('is_active', true);
 
             return (new Response())->ApiResponse([
                 'status' => 200,
@@ -40,6 +40,7 @@ class NextPurchaseDiscountController extends Controller
             'profit_manager_ids.*' => 'integer|exists:profit_managers,id',
             'target_customer_types' => 'nullable|array',
             'target_customer_types.*' => 'string|in:resident,Non_resident',
+            'sms_enabled' => 'nullable|boolean',
         ]);
 
         if ($validationResult !== true) {
@@ -56,8 +57,10 @@ class NextPurchaseDiscountController extends Controller
                 'discount_validity_days',
                 'profit_manager_ids',
                 'target_customer_types',
+                'sms_enabled',
             ]);
             $data['is_active'] = true;
+            $data['sms_enabled'] = $request->boolean('sms_enabled', true);
 
             $setting = NextPurchaseDiscount::create($data);
 
@@ -75,6 +78,56 @@ class NextPurchaseDiscountController extends Controller
         }
     }
 
+    public function update(Request $request, $id)
+    {
+        $validationResult = (new validateRequest())->validate($request->all(), [
+            'sms_enabled' => 'required|boolean',
+        ]);
+
+        if ($validationResult !== true) {
+            return $validationResult;
+        }
+
+        try {
+            $setting = NextPurchaseDiscount::find($id);
+
+            if (empty($setting)) {
+                return (new Response())->ApiResponse([
+                    'status' => 404,
+                    'message' => 'تنظیماتی با این شناسه یافت نشد.',
+                ]);
+            }
+
+            $setting->sms_enabled = $request->boolean('sms_enabled');
+            $setting->save();
+
+            if (!$setting->sms_enabled) {
+                DiscountSmsDelivery::query()
+                    ->where('status', DiscountSmsDelivery::STATUS_PENDING)
+                    ->update([
+                        'status' => DiscountSmsDelivery::STATUS_CANCELLED,
+                        'last_response' => [
+                            'reason' => 'sms_disabled',
+                            'at' => now()->toDateTimeString(),
+                        ],
+                    ]);
+            }
+
+            return (new Response())->ApiResponse([
+                'status' => 200,
+                'message' => $setting->sms_enabled
+                    ? 'ارسال پیامک تخفیف خرید بعدی فعال شد.'
+                    : 'ارسال پیامک تخفیف خرید بعدی غیرفعال شد.',
+                'items' => $setting,
+            ]);
+        } catch (\Exception $exception) {
+            return (new Response())->ApiResponse([
+                'status' => 500,
+                'message' => 'خطای سیستمی رخ داده است.',
+                'error_message' => $exception->getMessage(),
+            ]);
+        }
+    }
 
     public function destroy($id)
     {

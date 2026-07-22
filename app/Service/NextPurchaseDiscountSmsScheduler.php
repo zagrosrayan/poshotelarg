@@ -4,6 +4,7 @@ namespace App\Service;
 
 use App\Models\Discount;
 use App\Models\DiscountSmsDelivery;
+use App\Models\NextPurchaseDiscount;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Morilog\Jalali\Jalalian;
@@ -85,6 +86,23 @@ class NextPurchaseDiscountSmsScheduler
             'cancelled' => 0,
             'skipped' => 0,
         ];
+
+        $settings = NextPurchaseDiscount::getLatestActive();
+        if ($settings && !$settings->sms_enabled) {
+            $cancelled = DiscountSmsDelivery::query()
+                ->where('status', DiscountSmsDelivery::STATUS_PENDING)
+                ->update([
+                    'status' => DiscountSmsDelivery::STATUS_CANCELLED,
+                    'last_response' => [
+                        'reason' => 'sms_disabled',
+                        'at' => $now->toDateTimeString(),
+                    ],
+                ]);
+            $stats['cancelled'] += $cancelled;
+            $stats['skipped'] = 1;
+
+            return $stats;
+        }
 
         if ($now->hour < $startHour || $now->hour > $endHour) {
             $stats['skipped'] = 1;

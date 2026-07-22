@@ -134,6 +134,7 @@ Route::prefix('v1')->group(function () {
             Route::prefix('next-purchase-discount')->group(function () {
                 Route::get('/', [NextPurchaseDiscountController::class, 'index'])->name('next-purchase-discount.index');
                 Route::post('/', [NextPurchaseDiscountController::class, 'store'])->name('next-purchase-discount.create');
+                Route::put('/{id}', [NextPurchaseDiscountController::class, 'update'])->name('next-purchase-discount.update');
                 Route::delete('/{id}', [NextPurchaseDiscountController::class, 'destroy'])->name('next-purchase-discount.destroy');
                 Route::get('/active', [NextPurchaseDiscountController::class, 'getActiveDiscounts'])->name('next-purchase-discount.active');
             });
