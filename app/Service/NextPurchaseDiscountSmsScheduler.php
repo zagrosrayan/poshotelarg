@@ -14,6 +14,10 @@ class NextPurchaseDiscountSmsScheduler
     {
     }
 
+    /**
+     * Register deliveries for a new next-purchase discount.
+     * Issued SMS is sent immediately; reminder stays pending until its day.
+     */
     public function scheduleForDiscount(Discount $discount, ?string $mobile, ?string $name): void
     {
         $mobile = $this->smsService->normalizeMobile($mobile);
@@ -30,7 +34,7 @@ class NextPurchaseDiscountSmsScheduler
         $reminderBodyId = (int) config('services.payamak.body_ids.next_purchase_reminder');
         $reminderDays = (int) config('services.payamak.reminder_days_before_expiration', 4);
 
-        DiscountSmsDelivery::firstOrCreate(
+        $issued = DiscountSmsDelivery::firstOrCreate(
             [
                 'discount_id' => $discount->id,
                 'type' => DiscountSmsDelivery::TYPE_ISSUED,
@@ -44,6 +48,10 @@ class NextPurchaseDiscountSmsScheduler
                 'attempts' => 0,
             ]
         );
+
+        if ($issued->status === DiscountSmsDelivery::STATUS_PENDING) {
+            $this->attemptSend($issued, $discount, now());
+        }
 
         $reminderDate = $discount->expires_at->copy()->subDays($reminderDays)->startOfDay();
         if ($reminderDate->gte(now()->startOfDay())) {
@@ -129,41 +137,64 @@ class NextPurchaseDiscountSmsScheduler
                 continue;
             }
 
-            $result = $this->sendDelivery($delivery, $discount);
-            $attempts = $delivery->attempts + 1;
-
-            if ($result['success']) {
-                $delivery->update([
-                    'status' => DiscountSmsDelivery::STATUS_SENT,
-                    'attempts' => $attempts,
-                    'provider_reference' => $result['rec_id'],
-                    'sent_at' => $now,
-                    'last_response' => $result,
-                ]);
-                $stats['sent']++;
-                continue;
-            }
-
-            $delivery->update([
-                'status' => $attempts >= $maxAttempts
-                    ? DiscountSmsDelivery::STATUS_FAILED
-                    : DiscountSmsDelivery::STATUS_PENDING,
-                'attempts' => $attempts,
-                'last_response' => $result,
-            ]);
-
-            if ($attempts >= $maxAttempts) {
-                Log::error('Discount pattern SMS permanently failed', [
-                    'delivery_id' => $delivery->id,
-                    'discount_id' => $discount->id,
-                    'type' => $delivery->type,
-                    'result' => $result,
-                ]);
-                $stats['failed']++;
-            }
+            $outcome = $this->attemptSend($delivery, $discount, $now);
+            $stats[$outcome]++;
         }
 
         return $stats;
+    }
+
+    /**
+     * @return 'sent'|'failed'|'skipped'
+     */
+    protected function attemptSend(DiscountSmsDelivery $delivery, Discount $discount, Carbon $now): string
+    {
+        $maxAttempts = (int) config('services.payamak.max_attempts', 3);
+        $result = $this->sendDelivery($delivery, $discount);
+        $attempts = $delivery->attempts + 1;
+
+        if ($result['success']) {
+            $delivery->update([
+                'status' => DiscountSmsDelivery::STATUS_SENT,
+                'attempts' => $attempts,
+                'provider_reference' => $result['rec_id'],
+                'sent_at' => $now,
+                'last_response' => $result,
+            ]);
+
+            return 'sent';
+        }
+
+        $failedPermanently = $attempts >= $maxAttempts;
+
+        $delivery->update([
+            'status' => $failedPermanently
+                ? DiscountSmsDelivery::STATUS_FAILED
+                : DiscountSmsDelivery::STATUS_PENDING,
+            'attempts' => $attempts,
+            'last_response' => $result,
+        ]);
+
+        if ($failedPermanently) {
+            Log::error('Discount pattern SMS permanently failed', [
+                'delivery_id' => $delivery->id,
+                'discount_id' => $discount->id,
+                'type' => $delivery->type,
+                'result' => $result,
+            ]);
+
+            return 'failed';
+        }
+
+        Log::warning('Discount pattern SMS send failed, will retry', [
+            'delivery_id' => $delivery->id,
+            'discount_id' => $discount->id,
+            'type' => $delivery->type,
+            'attempts' => $attempts,
+            'result' => $result,
+        ]);
+
+        return 'skipped';
     }
 
     protected function isDiscountEligible(Discount $discount, Carbon $now): bool
@@ -193,10 +224,11 @@ class NextPurchaseDiscountSmsScheduler
                 ? Jalalian::fromCarbon($discount->expires_at)->format('Y/m/d')
                 : '';
 
+            // Pattern 499852: {0}=name, {1}=expires date, {2}=amount
             return $this->smsService->sendByBaseNumber2(
                 $delivery->recipient,
                 (int) $delivery->body_id,
-                [$name, $amount, $expires]
+                [$name, $expires, $amount]
             );
         }
 

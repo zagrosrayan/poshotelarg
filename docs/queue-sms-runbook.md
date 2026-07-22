@@ -1,7 +1,8 @@
 # Queue and SMS production runbook
 
-Next-purchase discount SMS now uses Melipayamak `SendByBaseNumber2` patterns
-and a local scheduler (`sms:dispatch-discount-patterns` every 15 minutes).
+Next-purchase discount SMS now uses Melipayamak `SendByBaseNumber2` patterns.
+The issued SMS is sent immediately when the discount is created; reminders and
+failed retries use `sms:dispatch-discount-patterns` every 15 minutes.
 No Laravel queue worker is required for automatic discount SMS.
 
 Required cron:

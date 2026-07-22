@@ -73,11 +73,24 @@ class HotelArgFeaturesTest extends TestCase
     }
 
     /**
-     * Test 2: Next purchase discount is created and pattern SMS deliveries are scheduled.
+     * Test 2: Next purchase discount is created and issued pattern SMS is sent immediately.
      */
     public function test_next_purchase_discount_configuration_and_jobs()
     {
         $validityDays = 15;
+
+        $this->partialMock(\App\Service\SmsService::class, function ($mock) {
+            $mock->shouldReceive('sendByBaseNumber2')
+                ->once()
+                ->andReturn([
+                    'success' => true,
+                    'message' => 'پیامک با موفقیت ارسال شد',
+                    'rec_id' => '5510015488085818224',
+                    'value' => '5510015488085818224',
+                    'raw' => null,
+                    'http_code' => 200,
+                ]);
+        });
 
         NextPurchaseDiscount::create([
             'name' => 'Test Next Purchase',
@@ -135,9 +148,11 @@ class HotelArgFeaturesTest extends TestCase
             ->first();
 
         $this->assertNotNull($issued);
-        $this->assertSame(DiscountSmsDelivery::STATUS_PENDING, $issued->status);
+        $this->assertSame(DiscountSmsDelivery::STATUS_SENT, $issued->status);
+        $this->assertSame('5510015488085818224', $issued->provider_reference);
         $this->assertSame(now()->toDateString(), $issued->scheduled_for->toDateString());
         $this->assertNotNull($reminder);
+        $this->assertSame(DiscountSmsDelivery::STATUS_PENDING, $reminder->status);
         $this->assertSame(
             $discount->expires_at->copy()->subDays(4)->toDateString(),
             $reminder->scheduled_for->toDateString()

@@ -36,7 +36,7 @@ return [
         'password' => env('API_KEY_MELI_PAYAMAK'),
         'from' => env('API_FROM_MELI_PAYAMAK'),
         'body_ids' => [
-            'next_purchase_issued' => (int) env('PAYAMAK_BODY_ID_NEXT_PURCHASE', 499216),
+            'next_purchase_issued' => (int) env('PAYAMAK_BODY_ID_NEXT_PURCHASE', 499852),
             'next_purchase_reminder' => (int) env('PAYAMAK_BODY_ID_NEXT_PURCHASE_REMINDER', 499219),
         ],
         'reminder_days_before_expiration' => 4,
