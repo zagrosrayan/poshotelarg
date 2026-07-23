@@ -88,7 +88,8 @@ class NextPurchaseDiscountSmsScheduler
         ];
 
         $settings = NextPurchaseDiscount::getLatestActive();
-        if ($settings && !$settings->sms_enabled) {
+        // Only block when explicitly disabled; null/missing => enabled
+        if ($settings && $settings->sms_enabled === false) {
             $cancelled = DiscountSmsDelivery::query()
                 ->where('status', DiscountSmsDelivery::STATUS_PENDING)
                 ->update([

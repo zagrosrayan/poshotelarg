@@ -883,7 +883,8 @@ class OrderController extends Controller
                 );
 
                 if ($discount) {
-                    if ($nextDiscountSettings->sms_enabled) {
+                    // null/missing column => treat as enabled (default on)
+                    if ($nextDiscountSettings->sms_enabled !== false) {
                         $mobile = collect([
                             $order->customer?->phone,
                             $order->reserve?->Mobile,
