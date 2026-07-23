@@ -1,12 +1,5 @@
-# SMS on/off for next-purchase discount
-
-Unzip into Laravel root.
+# Fix: treat null sms_enabled as ON
 
 ## After unzip
-php artisan migrate --force
+php artisan migrate --force --path=database/migrations/2026_07_22_123000_add_sms_enabled_to_next_purchase_discounts_table.php
 php artisan optimize:clear
-
-## Behavior
-- sms_enabled=true: send issued/reminder pattern SMS
-- sms_enabled=false: discount still created, SMS not sent
-- PUT /v1/next-purchase-discount/{id} with { "sms_enabled": true|false }
