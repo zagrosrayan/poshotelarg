@@ -869,7 +869,7 @@ class OrderController extends Controller
     {
         $nextDiscountSettings = NextPurchaseDiscount::getLatestActive();
         if (!$nextDiscountSettings) {
-            Logger::info('next_purchase_sms_skip', [
+            Logger::warning('next_purchase_sms_skip', [
                 'order_id' => $order->id,
                 'reason' => 'no_active_settings',
             ]);
@@ -894,7 +894,7 @@ class OrderController extends Controller
         }
 
         if ($hasActiveNextPurchaseDiscount) {
-            Logger::info('next_purchase_sms_skip', [
+            Logger::warning('next_purchase_sms_skip', [
                 'order_id' => $order->id,
                 'reason' => 'customer_already_has_active_discount',
                 'customer_id' => $order->customer_id,
@@ -904,7 +904,7 @@ class OrderController extends Controller
         }
 
         if (!$nextDiscountSettings->canApplyForCurrentOrder((float) $order->total_price)) {
-            Logger::info('next_purchase_sms_skip', [
+            Logger::warning('next_purchase_sms_skip', [
                 'order_id' => $order->id,
                 'reason' => 'order_amount_below_minimum',
                 'total_price' => $order->total_price,
@@ -919,7 +919,7 @@ class OrderController extends Controller
             $user = $order->user;
             if (!$user || !in_array($user->profit_manager_id, $nextDiscountSettings->profit_manager_ids)) {
                 $shouldApply = false;
-                Logger::info('next_purchase_sms_skip', [
+                Logger::warning('next_purchase_sms_skip', [
                     'order_id' => $order->id,
                     'reason' => 'profit_manager_not_allowed',
                     'user_profit_manager_id' => $user?->profit_manager_id,
@@ -932,7 +932,7 @@ class OrderController extends Controller
             $type = $order->reserve_number ? 'resident' : 'Non_resident';
             if (!in_array($type, $nextDiscountSettings->target_customer_types)) {
                 $shouldApply = false;
-                Logger::info('next_purchase_sms_skip', [
+                Logger::warning('next_purchase_sms_skip', [
                     'order_id' => $order->id,
                     'reason' => 'customer_type_not_allowed',
                     'type' => $type,
@@ -952,7 +952,7 @@ class OrderController extends Controller
         );
 
         if (!$discount) {
-            Logger::info('next_purchase_sms_skip', [
+            Logger::warning('next_purchase_sms_skip', [
                 'order_id' => $order->id,
                 'reason' => 'create_discount_failed',
             ]);
@@ -960,7 +960,7 @@ class OrderController extends Controller
         }
 
         if ($nextDiscountSettings->sms_enabled === false) {
-            Logger::info('next_purchase_sms_skip', [
+            Logger::warning('next_purchase_sms_skip', [
                 'order_id' => $order->id,
                 'discount_id' => $discount->id,
                 'reason' => 'sms_disabled',
@@ -992,7 +992,7 @@ class OrderController extends Controller
             return;
         }
 
-        Logger::info('next_purchase_sms_dispatch', [
+        Logger::warning('next_purchase_sms_dispatch', [
             'order_id' => $order->id,
             'discount_id' => $discount->id,
             'mobile' => $mobile,
