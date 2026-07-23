@@ -21,13 +21,61 @@ class Customer extends Model
         'pending_order_total',
         'complete_order_count',
         'complete_order_total',
-        'last_order_date'
+        'last_order_date',
+        'club_points',
+        'next_purchase_discount_code',
+        'next_purchase_discount_expires_at',
+        'next_purchase_discount_amount',
     ];
+
+    /** @var Discount|null|false */
+    protected $cachedNextPurchaseDiscount = false;
 
     public function orders()
     {
         $type = Type::query()->where('slug', TypeSlug::ORDER_STATUS_COMPLETE)->first();
         return $this->hasMany(Order::class)->whereNull('parent_id')->where('status', $type->id);
+    }
+
+    /**
+     * Unused next-purchase discount for this guest (includes expired, for UI warning).
+     */
+    protected function resolveNextPurchaseDiscount(): ?Discount
+    {
+        if ($this->cachedNextPurchaseDiscount !== false) {
+            return $this->cachedNextPurchaseDiscount;
+        }
+
+        $this->cachedNextPurchaseDiscount = Discount::query()
+            ->where('scope', 'next_purchase')
+            ->where('customer_id', $this->id)
+            ->where('is_active', true)
+            ->whereColumn('usage_count', '<', 'usage_limit')
+            ->latest('id')
+            ->first();
+
+        return $this->cachedNextPurchaseDiscount;
+    }
+
+    public function getClubPointsAttribute()
+    {
+        return $this->total_points;
+    }
+
+    public function getNextPurchaseDiscountCodeAttribute(): ?string
+    {
+        return $this->resolveNextPurchaseDiscount()?->code;
+    }
+
+    public function getNextPurchaseDiscountExpiresAtAttribute(): ?string
+    {
+        $expiresAt = $this->resolveNextPurchaseDiscount()?->expires_at;
+        return $expiresAt ? $expiresAt->toIso8601String() : null;
+    }
+
+    public function getNextPurchaseDiscountAmountAttribute()
+    {
+        return $this->resolveNextPurchaseDiscount()?->discount_value;
     }
 
     public function allOrders()

@@ -7,6 +7,7 @@ use App\Models\NextPurchaseDiscount;
 use App\Service\SmsService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;
+use Morilog\Jalali\Jalalian;
 
 class DiagnoseDiscountSms extends Command
 {
@@ -106,7 +107,7 @@ class DiagnoseDiscountSms extends Command
         if ($this->option('send')) {
             $to = (string) $this->option('to');
             $this->info("Sending live issued pattern to {$to} ...");
-            $result = $sms->sendByBaseNumber2($to, $issued, ['تست سیستم', now()->format('Y/m/d'), '150000']);
+            $result = $sms->sendByBaseNumber2($to, $issued, ['تست سیستم', '150000', Jalalian::now()->format('Y/m/d')]);
             $this->line(json_encode($result, JSON_UNESCAPED_UNICODE));
             if (!($result['success'] ?? false)) {
                 return self::FAILURE;

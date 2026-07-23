@@ -27,7 +27,8 @@ class OrderRepository
         $reserve_number,
         $customer_id,
         $is_special,
-        $use_club_points = false
+        $use_club_points = false,
+        $allowDiscountId = null
     )
     {
         $setting = Setting::first();
@@ -48,7 +49,13 @@ class OrderRepository
                 }
 
                 if ($discount->scope === 'next_purchase') {
-                    $this->validateNextPurchaseDiscount($discount, $customer_id, $reserve_number, $totalPrice);
+                    $this->validateNextPurchaseDiscount(
+                        $discount,
+                        $customer_id,
+                        $reserve_number,
+                        $totalPrice,
+                        $allowDiscountId
+                    );
                 }
 
                 if ($discount->profit_manager_ids) {
@@ -182,7 +189,7 @@ class OrderRepository
         ];
     }
 
-    private function validateNextPurchaseDiscount($discount, $customer_id, $reserve_number, $totalPrice)
+    private function validateNextPurchaseDiscount($discount, $customer_id, $reserve_number, $totalPrice, $allowDiscountId = null)
     {
         if (!$discount->is_active) {
             throw new \Exception('کد تخفیف فعال نیست');
@@ -206,6 +213,11 @@ class OrderRepository
 
         if ($totalPrice < $discount->minimum_price) {
             throw new \Exception('حداقل مبلغ سفارش برای استفاده از این تخفیف ' . number_format($discount->minimum_price) . ' ریال است');
+        }
+
+        // Already reserved on this pending order (usage was incremented at create)
+        if ($allowDiscountId && (int) $allowDiscountId === (int) $discount->id) {
+            return;
         }
 
         if ($discount->usage_limit && $discount->usage_count >= $discount->usage_limit) {

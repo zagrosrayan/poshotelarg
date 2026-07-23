@@ -258,11 +258,12 @@ class NextPurchaseDiscountSmsScheduler
                 ? Jalalian::fromCarbon($discount->expires_at)->format('Y/m/d')
                 : '';
 
-            // Pattern 499852: {0}=name, {1}=expires date, {2}=amount
+            // Pattern 499852: {0}=name, {1}=amount, {2}=expires date
+            // متن: مبلغ {1} ريال ... تا تاريخ {2}
             return $this->smsService->sendByBaseNumber2(
                 $delivery->recipient,
                 (int) $delivery->body_id,
-                [$name, $expires, $amount]
+                [$name, $amount, $expires]
             );
         }
 

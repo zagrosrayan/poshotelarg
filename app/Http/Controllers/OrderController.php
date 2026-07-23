@@ -642,8 +642,20 @@ class OrderController extends Controller
                         }
                     })
                     ->where('expires_at', '>', now())
-                    ->whereColumn('usage_count', '<', 'usage_limit')
+                    ->where(function ($q) use ($order) {
+                        $q->whereColumn('usage_count', '<', 'usage_limit');
+                        if ($order->discount_id) {
+                            $q->orWhere('id', $order->discount_id);
+                        }
+                    })
                     ->first();
+                if (!$nextPurchaseDiscount && $order->discount_id) {
+                    $nextPurchaseDiscount = Discount::query()
+                        ->where('id', $order->discount_id)
+                        ->where('scope', 'next_purchase')
+                        ->where('is_active', true)
+                        ->first();
+                }
                 if ($nextPurchaseDiscount) {
                     $discount_code = $nextPurchaseDiscount->code;
                 }
@@ -694,7 +706,8 @@ class OrderController extends Controller
                 $additionalFields['reserve_number'] ?? $order->reserve_number,
                 $additionalFields['customer_id'] ?? $order->customer_id,
                 false,
-                $additionalFields['use_club_points'] ?? false
+                $additionalFields['use_club_points'] ?? false,
+                $order->discount_id
             );
 
             $discount = null;
@@ -809,7 +822,10 @@ class OrderController extends Controller
             }
         }
 
-        DB::statement('EXEC dbo.sp_insert_POS_Table ?', [$order->invoice_number]);
+        // Protel POS sync procedure is SQL Server only
+        if (DB::getDriverName() === 'sqlsrv') {
+            DB::statement('EXEC dbo.sp_insert_POS_Table ?', [$order->invoice_number]);
+        }
 
         if (empty($itemsGroupedByPrinter)) {
             return (new Response())->ApiResponse([

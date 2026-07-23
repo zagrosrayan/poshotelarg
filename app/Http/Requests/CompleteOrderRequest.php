@@ -58,8 +58,9 @@ class CompleteOrderRequest extends FormRequest
                     if ($value != true) {
                         return;
                     }
-                    $customerId = $this->customer_id ?? $this->route('order')?->customer_id;
-                    $reserveNumber = $this->reserve_number ?? $this->route('order')?->reserve_number;
+                    $order = $this->route('order');
+                    $customerId = $this->customer_id ?? $order?->customer_id;
+                    $reserveNumber = $this->reserve_number ?? $order?->reserve_number;
                     $query = Discount::where('scope', 'next_purchase')
                         ->where('is_active', true)
                         ->where(function ($q) use ($customerId, $reserveNumber) {
@@ -70,8 +71,19 @@ class CompleteOrderRequest extends FormRequest
                                 $q->orWhere('reserve_number', $reserveNumber);
                             }
                         })
-                        ->whereColumn('usage_count', '<', 'usage_limit');
+                        ->where(function ($q) use ($order) {
+                            $q->whereColumn('usage_count', '<', 'usage_limit');
+                            if ($order?->discount_id) {
+                                $q->orWhere('id', $order->discount_id);
+                            }
+                        });
                     $discount = $query->first();
+                    if (!$discount && $order?->discount_id) {
+                        $discount = Discount::where('id', $order->discount_id)
+                            ->where('scope', 'next_purchase')
+                            ->where('is_active', true)
+                            ->first();
+                    }
                     if (!$discount) {
                         $fail('تخفیف خرید بعدی فعالی برای شما یافت نشد');
                         return;
