@@ -784,6 +784,19 @@ class OrderController extends Controller
             'status' => Type::query()->where('slug', TypeSlug::ORDER_STATUS_COMPLETE)->first()->id,
         ]));
 
+        $order->refresh();
+        $order->load(['customer', 'reserve', 'user', 'children']);
+
+        $this->awardClubPoints($order);
+
+        // تخفیف خرید بعدی + پیامک باید قبل از پرینت اجرا شود
+        // تا fail شدن پرینتر باعث از دست رفتن تخفیف/پیامک نشود
+        $this->issueNextPurchaseDiscountSms(
+            $order,
+            $request->phone ?? null,
+            $request->name ?? null
+        );
+
         $itemsGroupedByPrinter = [];
         foreach ($order->children as $item) {
             $item->update([
@@ -795,8 +808,6 @@ class OrderController extends Controller
                 $itemsGroupedByPrinter[$printer->id][] = $item;
             }
         }
-
-        $this->awardClubPoints($order);
 
         DB::statement('EXEC dbo.sp_insert_POS_Table ?', [$order->invoice_number]);
 
@@ -834,8 +845,36 @@ class OrderController extends Controller
             'status' => Type::query()->where('slug', TypeSlug::LOG_STATUS_SUCCESS)->first()->id,
         ]);
 
-        // ایجاد تخفیف خرید بعدی بر اساس تنظیمات فعال
+        return (new Response())->ApiResponse([
+            'message' => 'عملیات موفقیت آمیز بود',
+            'items' => Order::with([
+                'customer',
+                'user',
+                'status',
+                'reserve',
+                'paymentMethod',
+                'discount',
+                'food',
+                'parent',
+                'children.food',
+                'children.status',
+            ])->find($order->id)
+        ]);
+    }
+
+    /**
+     * Create next-purchase discount (if eligible) and send pattern SMS.
+     */
+    protected function issueNextPurchaseDiscountSms(Order $order, ?string $fallbackPhone = null, ?string $fallbackName = null): void
+    {
         $nextDiscountSettings = NextPurchaseDiscount::getLatestActive();
+        if (!$nextDiscountSettings) {
+            Logger::info('next_purchase_sms_skip', [
+                'order_id' => $order->id,
+                'reason' => 'no_active_settings',
+            ]);
+            return;
+        }
 
         $hasActiveNextPurchaseDiscount = false;
         if ($order->customer_id || $order->reserve_number) {
@@ -854,73 +893,117 @@ class OrderController extends Controller
                 ->exists();
         }
 
+        if ($hasActiveNextPurchaseDiscount) {
+            Logger::info('next_purchase_sms_skip', [
+                'order_id' => $order->id,
+                'reason' => 'customer_already_has_active_discount',
+                'customer_id' => $order->customer_id,
+                'reserve_number' => $order->reserve_number,
+            ]);
+            return;
+        }
 
-        if (!$hasActiveNextPurchaseDiscount && $nextDiscountSettings && $nextDiscountSettings->canApplyForCurrentOrder($order->total_price)) {
-            $shouldApply = true;
+        if (!$nextDiscountSettings->canApplyForCurrentOrder((float) $order->total_price)) {
+            Logger::info('next_purchase_sms_skip', [
+                'order_id' => $order->id,
+                'reason' => 'order_amount_below_minimum',
+                'total_price' => $order->total_price,
+                'minimum' => $nextDiscountSettings->minimum_purchase_amount,
+            ]);
+            return;
+        }
 
-            // Check Profit Manager
-            if (!empty($nextDiscountSettings->profit_manager_ids)) {
-                $user = $order->user;
-                if (!$user || !in_array($user->profit_manager_id, $nextDiscountSettings->profit_manager_ids)) {
-                    $shouldApply = false;
-                }
-            }
+        $shouldApply = true;
 
-            // Check Customer Type
-            if ($shouldApply && !empty($nextDiscountSettings->target_customer_types)) {
-                $type = $order->reserve_number ? 'resident' : 'Non_resident';
-                if (!in_array($type, $nextDiscountSettings->target_customer_types)) {
-                    Logger::info('type ' . $type, [$nextDiscountSettings->target_customer_types]);
-                    $shouldApply = false;
-                }
-            }
-
-            if ($shouldApply) {
-                $discount = $nextDiscountSettings->createDiscount(
-                    $order->total_price,
-                    $order->customer_id,
-                    $order->reserve_number
-                );
-
-                if ($discount) {
-                    // null/missing column => treat as enabled (default on)
-                    if ($nextDiscountSettings->sms_enabled !== false) {
-                        $mobile = collect([
-                            $order->customer?->phone,
-                            $order->reserve?->Mobile,
-                        ])->filter()->first();
-
-                        $name = collect([
-                            $order->customer?->name,
-                            $order->reserve?->GuestName,
-                            $order->reserve?->Name,
-                        ])->filter()->first() ?? 'مشتری گرامی';
-
-                        app(NextPurchaseDiscountSmsScheduler::class)->scheduleForDiscount(
-                            $discount,
-                            $mobile,
-                            $name
-                        );
-                    }
-                }
+        if (!empty($nextDiscountSettings->profit_manager_ids)) {
+            $user = $order->user;
+            if (!$user || !in_array($user->profit_manager_id, $nextDiscountSettings->profit_manager_ids)) {
+                $shouldApply = false;
+                Logger::info('next_purchase_sms_skip', [
+                    'order_id' => $order->id,
+                    'reason' => 'profit_manager_not_allowed',
+                    'user_profit_manager_id' => $user?->profit_manager_id,
+                    'allowed' => $nextDiscountSettings->profit_manager_ids,
+                ]);
             }
         }
 
-        return (new Response())->ApiResponse([
-            'message' => 'عملیات موفقیت آمیز بود',
-            'items' => Order::with([
-                'customer',
-                'user',
-                'status',
-                'reserve',
-                'paymentMethod',
-                'discount',
-                'food',
-                'parent',
-                'children.food',
-                'children.status',
-            ])->find($order->id)
+        if ($shouldApply && !empty($nextDiscountSettings->target_customer_types)) {
+            $type = $order->reserve_number ? 'resident' : 'Non_resident';
+            if (!in_array($type, $nextDiscountSettings->target_customer_types)) {
+                $shouldApply = false;
+                Logger::info('next_purchase_sms_skip', [
+                    'order_id' => $order->id,
+                    'reason' => 'customer_type_not_allowed',
+                    'type' => $type,
+                    'allowed' => $nextDiscountSettings->target_customer_types,
+                ]);
+            }
+        }
+
+        if (!$shouldApply) {
+            return;
+        }
+
+        $discount = $nextDiscountSettings->createDiscount(
+            (float) $order->total_price,
+            $order->customer_id,
+            $order->reserve_number
+        );
+
+        if (!$discount) {
+            Logger::info('next_purchase_sms_skip', [
+                'order_id' => $order->id,
+                'reason' => 'create_discount_failed',
+            ]);
+            return;
+        }
+
+        if ($nextDiscountSettings->sms_enabled === false) {
+            Logger::info('next_purchase_sms_skip', [
+                'order_id' => $order->id,
+                'discount_id' => $discount->id,
+                'reason' => 'sms_disabled',
+            ]);
+            return;
+        }
+
+        $mobile = collect([
+            $order->customer?->phone,
+            $order->reserve?->Mobile ?? null,
+            $fallbackPhone,
+        ])->filter()->first();
+
+        $name = collect([
+            $order->customer?->name,
+            $order->reserve?->GuestName ?? null,
+            $order->reserve?->Name ?? null,
+            $fallbackName,
+        ])->filter()->first() ?? 'مشتری گرامی';
+
+        if (!$mobile) {
+            Logger::warning('next_purchase_sms_skip', [
+                'order_id' => $order->id,
+                'discount_id' => $discount->id,
+                'reason' => 'mobile_missing',
+                'customer_id' => $order->customer_id,
+                'reserve_number' => $order->reserve_number,
+            ]);
+            return;
+        }
+
+        Logger::info('next_purchase_sms_dispatch', [
+            'order_id' => $order->id,
+            'discount_id' => $discount->id,
+            'mobile' => $mobile,
+            'name' => $name,
         ]);
+
+        app(NextPurchaseDiscountSmsScheduler::class)->scheduleForDiscount(
+            $discount,
+            $mobile,
+            $name
+        );
     }
 
     private function awardClubPoints(Order $order)
