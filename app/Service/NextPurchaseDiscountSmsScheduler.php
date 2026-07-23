@@ -21,7 +21,9 @@ class NextPurchaseDiscountSmsScheduler
      */
     public function scheduleForDiscount(Discount $discount, ?string $mobile, ?string $name): void
     {
-        $mobile = $this->smsService->normalizeMobile($mobile);
+        $mobile = method_exists($this->smsService, 'normalizeMobile')
+            ? $this->smsService->normalizeMobile($mobile)
+            : $this->fallbackNormalizeMobile($mobile);
         if (!$mobile || !$discount->expires_at) {
             return;
         }
@@ -235,6 +237,19 @@ class NextPurchaseDiscountSmsScheduler
 
     protected function sendDelivery(DiscountSmsDelivery $delivery, Discount $discount): array
     {
+        if (!method_exists($this->smsService, 'sendByBaseNumber2')) {
+            Log::error('SmsService::sendByBaseNumber2 is missing on server. Deploy updated SmsService.php and reload PHP-FPM.');
+
+            return [
+                'success' => false,
+                'message' => 'SmsService::sendByBaseNumber2 missing',
+                'rec_id' => null,
+                'value' => null,
+                'raw' => null,
+                'http_code' => null,
+            ];
+        }
+
         $name = $delivery->recipient_name ?: 'مشتری گرامی';
 
         if ($delivery->type === DiscountSmsDelivery::TYPE_ISSUED) {
@@ -256,5 +271,24 @@ class NextPurchaseDiscountSmsScheduler
             (int) $delivery->body_id,
             [$name]
         );
+    }
+
+    protected function fallbackNormalizeMobile(?string $mobile): ?string
+    {
+        if ($mobile === null || $mobile === '') {
+            return null;
+        }
+
+        $mobile = preg_replace('/[^0-9]/', '', $mobile);
+
+        if (strlen($mobile) === 10 && str_starts_with($mobile, '9')) {
+            $mobile = '0' . $mobile;
+        }
+
+        if (preg_match('/^09[0-9]{9}$/', $mobile)) {
+            return $mobile;
+        }
+
+        return null;
     }
 }
