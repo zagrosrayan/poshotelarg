@@ -22,10 +22,14 @@ class InspectNextPurchaseDiscounts extends Command
         $limit = max(1, (int) $this->option('limit'));
 
         $this->info('=== Next-purchase settings ===');
-        $settings = NextPurchaseDiscount::query()->orderByDesc('id')->limit(5)->get([
-            'id', 'name', 'is_active', 'sms_enabled', 'minimum_purchase_amount',
-            'discount_percentage', 'discount_validity_days', 'profit_manager_ids', 'target_customer_types',
-        ]);
+        $settingCols = ['id', 'name', 'is_active', 'minimum_purchase_amount', 'discount_percentage', 'discount_validity_days', 'profit_manager_ids', 'target_customer_types'];
+        if (Schema::hasColumn('next_purchase_discounts', 'sms_enabled')) {
+            $settingCols[] = 'sms_enabled';
+        } else {
+            $this->warn('Column sms_enabled does not exist yet');
+        }
+
+        $settings = NextPurchaseDiscount::query()->orderByDesc('id')->limit(5)->get($settingCols);
 
         if ($settings->isEmpty()) {
             $this->warn('No rows in next_purchase_discounts');
@@ -36,7 +40,9 @@ class InspectNextPurchaseDiscounts extends Command
                     $s->id,
                     $s->name,
                     var_export($s->is_active, true),
-                    var_export($s->sms_enabled, true),
+                    Schema::hasColumn('next_purchase_discounts', 'sms_enabled')
+                        ? var_export($s->sms_enabled, true)
+                        : 'N/A',
                     $s->minimum_purchase_amount,
                     $s->discount_percentage,
                     $s->discount_validity_days,
