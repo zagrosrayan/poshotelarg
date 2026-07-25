@@ -131,7 +131,7 @@ class OrderRepository
             $item_price = intval(round($food->price * $order['quantity']));
             $product_price += $item_price;
 
-            $foodProfitManagerId = $food->profitManager->id ?? null;
+            $foodProfitManagerId = (int) ($food->profit_manager_id ?? $food->profitManager?->id ?? 0);
             $shouldApplyDiscount = $this->shouldApplyDiscountToFood($discount_code, $foodProfitManagerId);
 
             if ($shouldApplyDiscount && $discounted_price > 0) {
