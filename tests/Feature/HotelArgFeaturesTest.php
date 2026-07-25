@@ -155,7 +155,7 @@ class HotelArgFeaturesTest extends TestCase
         $this->assertNotNull($reminder);
         $this->assertSame(DiscountSmsDelivery::STATUS_PENDING, $reminder->status);
         $this->assertSame(
-            $discount->expires_at->copy()->subDays(4)->toDateString(),
+            $discount->expires_at->copy()->subDays(2)->toDateString(),
             $reminder->scheduled_for->toDateString()
         );
     }
