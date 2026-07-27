@@ -22,7 +22,7 @@
         <tbody>
         <tr>
             <td><strong>نام مشتری:</strong></td>
-            <td>{{ $order->customer->name ?? $order->reserve->GuestName }}</td>
+            <td>{{ optional($order->customer)->name ?? optional($order->reserve)->GuestName ?? '-----' }}</td>
             <td><strong>روش پرداخت:</strong></td>
             <td>{{ optional($order->paymentMethod)->name }}</td>
             <td><strong>صندوق دار:</strong></td>
@@ -34,7 +34,7 @@
                     <td><strong>داخل سالن</strong></td>
                     <td>{{ $order->desc_number }}</td> @break @case('room_service')
                     <td><strong>شماره اتاق</strong></td>
-                    <td>{{ $order->reserve->Room ?? 'بدون اتاق' }}</td> @break @default
+                    <td>{{ optional($order->reserve)->Room ?? 'بدون اتاق' }}</td> @break @default
                     <td><strong>داخل سالن</strong></td>
                     <td>{{ $order->desc_number ?? 'بدون شماره میز' }}</td> @break
             @endswitch
@@ -42,7 +42,7 @@
             <td>{{ $order->invoice_number . '#' }}</td>
 
             <td><strong>اسم شرکت</strong></td>
-            <td>{{ $order?->reserve?->company ?? '' }}</td>
+            <td>{{ optional($order->reserve)->company ?? '' }}</td>
         </tr>
         </tbody>
     </table>
@@ -61,7 +61,7 @@
                 <td>{{ $index + 1 }}</td>
                 <td>{{ optional($item->food)->name }}</td>
                 <td>{{ $item->quantity }}</td>
-                <td>{{ number_format($item->food->price, 0, '', ',') }}</td>
+                <td>{{ number_format(optional($item->food)->price ?? 0, 0, '', ',') }}</td>
                 <td>{{ number_format( $item->price, 0, '', ',') }}</td>
             </tr>
         @endforeach </tbody>
