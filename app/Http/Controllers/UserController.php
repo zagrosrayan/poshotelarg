@@ -131,15 +131,23 @@ class UserController extends Controller
         $validationResult = (new validateRequest())->validate($request->all(), [
             'name'        => 'nullable|string',
             'reserve_number' => 'nullable|string',
+            'room_number' => 'nullable|string',
         ]);
         if ($validationResult !== true) {
             return $validationResult;
         }
         try {
+            $roomSearch = $request->filled('room_number')
+                ? $request->room_number
+                : $request->reserve_number;
+
             $guest = GuestUser::query()->when($request->name, function ($query) use ($request) {
                 $query->where('GuestName', 'like', '%' . $request->name . '%');
-            })->when($request->reserve_number, function ($query) use ($request) {
-                $query->where('Room', $request->reserve_number);
+            })->when($roomSearch, function ($query) use ($roomSearch) {
+                $query->where(function ($q) use ($roomSearch) {
+                    $q->where('Room', 'like', '%' . $roomSearch . '%')
+                        ->orWhere('Reserve', 'like', '%' . $roomSearch . '%');
+                });
             })->paginate(10);
             Log::query()->create([
                 'user_id' => $request->user()->id,
