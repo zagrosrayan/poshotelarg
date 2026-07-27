@@ -211,6 +211,14 @@ class PrinterController extends Controller
                 ]);
             }
 
+            $order->loadMissing([
+                'customer',
+                'reserve',
+                'user',
+                'paymentMethod',
+                'children.food',
+            ]);
+
             // گروه‌بندی آیتم‌ها بر اساس پرینتر
             $itemsGroupedByPrinter = [];
             foreach ($order->children as $item) {
