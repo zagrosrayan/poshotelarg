@@ -676,9 +676,15 @@ class OrderController extends Controller
     }
     protected function finalizeOrder(Request $request, Order $order, array $additionalFields)
     {
-        $shouldRecalculate = !empty($additionalFields['discount_code'])
+        $hasNewDiscount = !empty($additionalFields['discount_code'])
             || (!empty($additionalFields['discount_type']) && !empty($additionalFields['discount_value']))
             || (!empty($additionalFields['use_club_points']) && $additionalFields['use_club_points'] === true);
+
+        $hasExistingDiscount = !empty($order->discount_id)
+            || ($order->club_points_used ?? 0) > 0
+            || !empty($order->next_purchase_discount_id);
+
+        $shouldRecalculate = $hasNewDiscount || $hasExistingDiscount;
 
         if ($shouldRecalculate) {
             $oldDiscountId = $order->discount_id;
@@ -1742,9 +1748,6 @@ class OrderController extends Controller
                 'quantity' => array_sum(array_column($validated['order'], 'quantity')),
                 'tax' => $total_tax,
                 'discounted_price' => $calculate['discounted_price'],
-                'discount_code' => $discount_code,
-                'discount_value' => $request->discount_value,
-                'discount_type' => $request->discount_type,
                 'discount_id' => $newDiscountId,
                 'service_type' => $validated['service_type'],
                 'rate_service' => $total_service_fee,
@@ -1893,6 +1896,9 @@ class OrderController extends Controller
     /**
      * تغییرات غیر آیتمی (مثل سرویس یا نوع سفارش) را چک می‌کند
      */
+    /**
+     * تغییرات غیر آیتمی (مثل سرویس یا نوع سفارش) را چک می‌کند
+     */
     protected function hasOrderChanged($order, array $validated): bool
     {
         if ($order->service_type != ($validated['service_type'] ?? $order->service_type)) {
@@ -1915,36 +1921,66 @@ class OrderController extends Controller
             return true;
         }
 
+        $hasExistingDiscount = !empty($order->discount_id)
+            || ($order->club_points_used ?? 0) > 0
+            || !empty($order->next_purchase_discount_id);
+
         $newDiscountCode = collect([
             $validated['discount_global_code'] ?? null,
             $validated['discount_normal_code'] ?? null,
-            $validated['discount_next_purchase_code'] ?? null,
         ])->filter()->first();
 
-        if ($order->discount_code != $newDiscountCode) {
+        $hasNewCodeDiscount  = !empty($newDiscountCode);
+        $hasNewManualDiscount = !empty($validated['discount_value']) && !empty($validated['discount_type']);
+        $hasNewNextPurchase  = !empty($validated['use_next_purchase_discount']);
+        $hasNewClubPoints    = !empty($validated['use_club_points']);
+        $hasNewDiscount      = $hasNewCodeDiscount || $hasNewManualDiscount || $hasNewNextPurchase || $hasNewClubPoints;
+
+        if ($hasExistingDiscount && !$hasNewDiscount) {
             return true;
         }
 
-        if ($order->discount_next_purchase_code != ($validated['discount_next_purchase_code'] ?? null)) {
+        if (!$hasExistingDiscount && $hasNewDiscount) {
             return true;
         }
 
-        if ($order->discount_value != ($validated['discount_value'] ?? null)) {
-            return true;
-        }
+        if ($hasExistingDiscount && $hasNewDiscount) {
+            $orderDiscount = $order->discount;
 
-        if ($order->discount_type != ($validated['discount_type'] ?? null)) {
-            return true;
+            if ($hasNewCodeDiscount) {
+                if (!$orderDiscount || $orderDiscount->code != $newDiscountCode) {
+                    return true;
+                }
+            }
+
+            if ($hasNewManualDiscount) {
+                if (
+                    !$orderDiscount
+                    || $orderDiscount->scope !== 'in_order'
+                    || $orderDiscount->discount_value != $validated['discount_value']
+                    || $orderDiscount->discount_type != $validated['discount_type']
+                ) {
+                    return true;
+                }
+            }
+
+            if ($hasNewNextPurchase) {
+                if (!$orderDiscount || $orderDiscount->scope !== 'next_purchase') {
+                    return true;
+                }
+            }
+
+            if ($hasNewClubPoints) {
+                if (($order->club_points_used ?? 0) <= 0) {
+                    return true;
+                }
+            }
         }
 
         $oldClubPointsUsed = $order->club_points_used ?? 0;
-        $newUseClubPoints = $validated['use_club_points'] ?? false;
+        $newUseClubPoints  = $validated['use_club_points'] ?? false;
 
         if ($oldClubPointsUsed > 0 && !$newUseClubPoints) {
-            return true;
-        }
-
-        if ($oldClubPointsUsed == 0 && $newUseClubPoints) {
             return true;
         }
 
